@@ -1,9 +1,8 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
-import { useGSAP } from "@gsap/react"
 
 gsap.registerPlugin(ScrollTrigger)
 ScrollTrigger.config({ ignoreMobileResize: true })
@@ -152,7 +151,8 @@ export default function Home() {
     })
   }
 
-  useGSAP(() => {
+  useEffect(() => {
+    const ctx = gsap.context(() => {
     gsap.fromTo(
       ".hero-line",
       { y: 60, opacity: 0 },
@@ -204,8 +204,10 @@ export default function Home() {
       })
     }
     gsap.ticker.add(tick)
-    return () => { gsap.ticker.remove(tick) }
-  }, { scope: mainRef })
+      return () => { gsap.ticker.remove(tick) }
+    }, mainRef)
+    return () => ctx.revert()
+  }, [])
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
