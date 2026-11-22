@@ -1,6 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import * as THREE from 'three'
+import ContactForm from './ContactForm'
 
 function Casa3D() {
   const ref = useRef<THREE.Mesh>(null)
@@ -65,7 +66,12 @@ function App() {
           Quiero mi proyecto
         </button>
       </div>
-
+      <div style={{ padding: '60px 20px', background: 'white', position: 'relative', zIndex: 2 }}>
+  <ContactForm />
+</div>
+      <div style={{ padding: '60px 20px', background: 'white' }}>
+        <ContactForm />
+      </div>
     </div>
   )
 }
