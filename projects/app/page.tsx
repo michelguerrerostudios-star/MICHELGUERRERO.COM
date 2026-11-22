@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const GOLD = "#c9a86a"
 
@@ -15,6 +15,27 @@ export default function Home() {
   const [mensaje, setMensaje] = useState("")
   const [enviado, setEnviado] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+
+  useEffect(() => {
+    // SOLO reproduce el video que estas viendo. Los demas en pausa.
+    // Asi el navegador no se ahoga y no se cortan los frames.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const video = entry.target as HTMLVideoElement
+          if (entry.isIntersecting) {
+            video.play().catch(() => {})
+          } else {
+            video.pause()
+          }
+        })
+      },
+      { threshold: 0.35, rootMargin: "0px 0px -10% 0px" }
+    )
+    videoRefs.current.forEach((v) => v && observer.observe(v))
+    return () => observer.disconnect()
+  }, [])
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
@@ -33,8 +54,7 @@ export default function Home() {
   }
 
   return (
-    <main style={{ background: "#000", color: "white", fontFamily: "Arial, Helvetica, sans-serif", overflowX: "hidden" }}>
-      {/* HERO */}
+    <main style={{ background: "#000", color: "white", fontFamily: "Arial, Helvetica, sans-serif", overflowX: "hidden", scrollBehavior: "smooth" }}>
       <section style={{ minHeight: "100vh", padding: "28px 8% 40px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, letterSpacing: 4, color: GOLD }}>
           <span>MICHEL GUERRERO — ARCHITECT — NEW YORK</span><span>HUDSON YARDS</span>
@@ -45,26 +65,33 @@ export default function Home() {
           <p style={{ fontSize: 19, maxWidth: 640, color: "#ccc", lineHeight: 1.5, marginTop: 22 }}>Arquitectura del nivel Pritzker. Formada en el lenguaje de Zaha Hadid.<br />Un edificio que nace delante de ti. Del primer vector a la última silla.</p>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-          <p style={{ fontSize: 11, letterSpacing: 3, color: "#888" }}>HAZ SCROLL — LA PELÍCULA EMPIEZA ↓</p>
-          <p style={{ fontSize: 11, letterSpacing: 3, color: GOLD }}>TORRE GUERRERO — 5 VIDEOS — FULL SCROLL</p>
+          <p style={{ fontSize: 11, letterSpacing: 3, color: "#888" }}>HAZ SCROLL LENTO — LA PELÍCULA ES CONTINUA ↓</p>
+          <p style={{ fontSize: 11, letterSpacing: 3, color: GOLD }}>TORRE GUERRERO — 5 VIDEOS — SIN CORTES</p>
         </div>
       </section>
 
-      {/* 5 VIDEOS */}
       {videos.map((v, i) => (
-        <section key={i} style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "end" }}>
-          <video src={v.src} autoPlay muted loop playsInline preload="auto" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 40%, rgba(0,0,0,0.85) 100%)" }} />
+        <section key={i} style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "end", overflow: "hidden", background: "#000" }}>
+          <video
+            ref={(el) => { videoRefs.current[i] = el }}
+            src={v.src}
+            muted
+            loop
+            playsInline
+            preload={i === 0 ? "auto" : "metadata"}
+            disablePictureInPicture
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden" }}
+          />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 40%, rgba(0,0,0,0.85) 100%)", pointerEvents: "none" }} />
           <div style={{ position: "relative", padding: "60px 8%", maxWidth: 900 }}>
             <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.kicker}</p>
             <h2 style={{ fontSize: "clamp(36px, 6vw, 72px)", lineHeight: 0.95, textTransform: "uppercase", margin: "12px 0" }}>{v.title}</h2>
             <p style={{ color: "#ddd", fontSize: 18, lineHeight: 1.5, maxWidth: 640 }}>{v.desc}</p>
-            <p style={{ color: GOLD, fontSize: 11, letterSpacing: 3 }}>VIDEO {i+1} / 5 — SIN CORTES</p>
+            <p style={{ color: GOLD, fontSize: 11, letterSpacing: 3 }}>VIDEO {i+1} / 5 — COMPLETO — SIN CORTES</p>
           </div>
         </section>
       ))}
 
-      {/* CONTACTO PRIVADO */}
       <section style={{ padding: "80px 6%", background: "#0a0a0a", textAlign: "center" }}>
         <h2 style={{ fontSize: "clamp(36px, 5vw, 56px)", textTransform: "uppercase" }}>Hablemos en <span style={{ color: GOLD }}>privado.</span></h2>
         <p style={{ color: "#aaa" }}>No pedimos tu nombre ni tu correo. Solo tu mensaje. Trusting People.</p>
