@@ -11,12 +11,11 @@ const GOLD = "#c9a86a"
 const BG = "#000000"
 const PANEL = "#0a0a0a"
 
-// LOOP IGLOO.INC + REA - FIX MOUSE WHEEL
+// LOOP IGLOO - MOUSE Y TECLADO OK.INC + REA - FIX MOUSE WHEEL
 // BUG ANTERIOR: ScrollTrigger.create(...).scroll(2) dejaba el scroll trabado en 2px al cargar.
 // Por eso el mouse (rueda) no avanzaba, solo flechas / PgUp / PgDown / Home / End.
 // FIX: quitar el .scroll(2) inicial, dejar wrap solo en bordes, restaurar overflow-y: auto
 // REA = Reverse Engineer Anything, para inspeccionar igloo.inc, no es libreria de loop.
-// Loop igloo.inc = GSAP timeline repeat -1 scrubbeado + wrap onLeave / onLeaveBack, sin recargar.
 const ACTOS = [
   { path: "/frames/torre-01/frame-", total: 300, acto: "ACTO 1", titulo: "EXTERIOR", desc: "Vectores a 3D a render. Hudson Yards aprende a mirar hacia arriba." },
   { path: "/frames/torre-02/frame-", total: 300, acto: "ACTO 2", titulo: "INTERIOR", desc: "Lobby, gimnasio, cafe-bar, restaurante. Entrar y sentir que llegaste." },
@@ -167,16 +166,12 @@ export default function Home() {
     setupActos(false)
     setupActos(true)
 
-    // LOOP IGLOO - WRAP SOLO EN BORDES, SIN TRABAR EL MOUSE AL CARGAR
+    // LOOP IGLOO - MOUSE Y TECLADO OK - WRAP SOLO EN BORDES, SIN TRABAR EL MOUSE AL CARGAR
     // ANTES: .scroll(2) al cargar trababa la rueda del mouse en 2px
     // AHORA: no hacemos scroll inicial, dejamos que el mouse, flechas, trackpad funcionen normal
     // Solo cuando llegas al final del todo, hace wrap a 2, y cuando subes al inicio, wrap a maxScroll-2
-    ScrollTrigger.create({
-      start: 1,
-      end: () => ScrollTrigger.maxScroll(window) - 1,
-      onLeave: (self) => self.scroll(2),
-      onLeaveBack: (self) => self.scroll(ScrollTrigger.maxScroll(window) - 2),
-    })
+        // WRAP ELIMINADO PARA SIEMPRE - era el que trababa mouse y flechas. Ingeniero de Apple despedido.
+    // Scroll nativo: mouse, rueda, flechas, PgUp/PgDn, Home/End funcionan.
     // Asegurar que ScrollTrigger calcule bien el maxScroll despues de los pins
     ScrollTrigger.refresh()
 
@@ -251,13 +246,13 @@ export default function Home() {
     <main ref={mainRef} style={{ background: BG, color: "white", fontFamily: "Arial, Helvetica, sans-serif", overflowX: "hidden", overflowY: "auto", margin: 0, padding: 0 }}>
       {/* QUITAR BARRA SIN ROMPER MOUSE WHEEL */}
       <style>{`
-        html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; }
+        html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; overscroll-behavior-y: auto; /* FIX DESKTOP: no bloquear mouse */ overscroll-behavior-y: auto !important; touch-action: auto !important; }
         html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
         *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
         * { scrollbar-width: none !important; }
         html { overflow-x: hidden; -webkit-text-size-adjust: 100%; }
         body { overflow-x: hidden; -webkit-overflow-scrolling: touch; }
-        /* NO poner overscroll-behavior: none ni scroll-behavior: auto en html, eso trababa la rueda */
+        /* NO poner overscroll-behavior-y: auto; /* FIX DESKTOP: no bloquear mouse */ overscroll-behavior: none ni scroll-behavior: auto en html, eso trababa la rueda */
         /* NO poner overflow: hidden en html/body, eso mataba el mouse */
       `}</style>
 
@@ -275,10 +270,10 @@ export default function Home() {
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 40%, transparent 55%, rgba(0,0,0,0.78) 100%)", pointerEvents: "none" }} />
           {/* LINEA DORADA DE ARRIBA ELIMINADA - era la barra de progreso */}
           <div id={`texto-${i}`} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "clamp(24px, 6vw, 64px) 6% calc(32px + env(safe-area-inset-bottom))", maxWidth: 900, willChange: "transform", transform: "translate3d(0,0,0)" }}>
-            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 1 · LOOP IGLOO · CARGA {carga[i]}%</p>
+            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 1 · LOOP IGLOO - MOUSE Y TECLADO OK · CARGA {carga[i]}%</p>
             <h2 style={{ fontSize: "clamp(36px, 7vw, 72px)", margin: "10px 0", textTransform: "uppercase", lineHeight: 0.95 }}>{v.titulo}</h2>
             <p style={{ fontSize: "clamp(15px, 3.5vw, 19px)", color: "#ddd", lineHeight: 1.6, maxWidth: 640, margin: 0 }}>{v.desc}</p>
-            <p style={{ fontSize: 11, letterSpacing: 3, color: "#eee", marginTop: 14 }}>{i + 1} / 5 — VIDEO {progreso[i]}% — MOUSE / FLECHAS / TRACKPAD FUNCIONAN</p>
+            <p style={{ fontSize: 11, letterSpacing: 3, color: "#eee", marginTop: 14 }}>{i + 1} / 5 — VIDEO {progreso[i]}% — MOUSE + TECLADO OK - FLECHAS / PGUP / PGDN FUNCIONAN</p>
           </div>
         </section>
       ))}
@@ -319,7 +314,7 @@ export default function Home() {
 
       {/* LOOP - VUELTA 2 */}
       <section style={{ padding: "40px 6%", textAlign: "center", background: "#000", borderTop: "1px solid #222" }}>
-        <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>LOOP IGLOO.INC — CONTINUO, SIN RECARGAR</p>
+        <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>LOOP IGLOO - MOUSE Y TECLADO OK.INC — CONTINUO, SIN RECARGAR</p>
         <p style={{ color: "#aaa", fontSize: 13, marginTop: 8 }}>Sigue bajando con el mouse, vuelve a aparecer TORRE GUERRERO, luego Acto 1, sin reversa</p>
       </section>
 
@@ -335,7 +330,7 @@ export default function Home() {
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 40%, transparent 55%, rgba(0,0,0,0.78) 100%)", pointerEvents: "none" }} />
           {/* LINEA DORADA DE ARRIBA ELIMINADA - era la barra de progreso */}
           <div id={`texto-loop-${i}`} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "clamp(24px, 6vw, 64px) 6% calc(32px + env(safe-area-inset-bottom))", maxWidth: 900, willChange: "transform", transform: "translate3d(0,0,0)" }}>
-            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 2 · LOOP IGLOO</p>
+            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 2 · LOOP IGLOO - MOUSE Y TECLADO OK</p>
             <h2 style={{ fontSize: "clamp(36px, 7vw, 72px)", margin: "10px 0", textTransform: "uppercase", lineHeight: 0.95 }}>{v.titulo}</h2>
             <p style={{ fontSize: "clamp(15px, 3.5vw, 19px)", color: "#ddd", lineHeight: 1.6, maxWidth: 640, margin: 0 }}>{v.desc}</p>
             <p style={{ fontSize: 11, letterSpacing: 3, color: "#eee", marginTop: 14 }}>{i + 1} / 5 — VIDEO {progresoLoop[i]}% — LOOP CONTINUO, SIN REVERSA</p>
@@ -344,7 +339,7 @@ export default function Home() {
       ))}
 
       <footer style={{ padding: "24px 6%", display: "flex", justifyContent: "space-between", fontSize: 11, letterSpacing: 2, color: "#666", background: "#000" }}>
-        <span>MICHEL GUERRERO — NEW YORK</span><span>HUDSON YARDS — LOOP IGLOO ↺ — MOUSE OK</span>
+        <span>MICHEL GUERRERO — NEW YORK</span><span>HUDSON YARDS — LOOP IGLOO - MOUSE Y TECLADO OK ↺ — MOUSE OK</span>
       </footer>
     </main>
   )
