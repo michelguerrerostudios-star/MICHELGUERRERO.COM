@@ -218,12 +218,12 @@ export default function Home() {
         input, textarea { font-size: 16px !important; }
       `}</style>
 
-      <section style={{ minHeight: "100svh", minHeight: "100dvh" as any, padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      <section style={{ minHeight: "100svh", padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
         <HeroContent lineClass="hero-line" />
       </section>
 
       {ACTOS.map((v, i) => (
-        <section key={v.path} id={`acto-${i}`} style={{ position: "relative", height: "100svh", height: "100dvh" as any, background: "#000", margin: 0, padding: 0, overflow: "hidden", transform: "translateZ(0)" }}>
+        <section key={v.path} id={`acto-${i}`} style={{ position: "relative", height: "100svh", background: "#000", margin: 0, padding: 0, overflow: "hidden", transform: "translateZ(0)" }}>
           <div style={{ position: "absolute", inset: 0, background: "#000" }}>
             <img src={srcs[i]} alt={v.titulo} style={imgStyle} draggable={false} />
           </div>
@@ -273,12 +273,12 @@ export default function Home() {
         <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>LOOP IGLOO.INC — CONTINUO, SIN RECARGAR — SIN PARPADEO</p>
       </section>
 
-      <section id="hero-loop" style={{ minHeight: "100svh", minHeight: "100dvh" as any, padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#000" }}>
+      <section id="hero-loop" style={{ minHeight: "100svh", padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#000" }}>
         <HeroContent lineClass="hero-loop-line" />
       </section>
 
       {ACTOS.map((v, i) => (
-        <section key={`loop-${v.path}`} id={`acto-loop-${i}`} style={{ position: "relative", height: "100svh", height: "100dvh" as any, background: "#000", margin: 0, padding: 0, overflow: "hidden", transform: "translateZ(0)" }}>
+        <section key={`loop-${v.path}`} id={`acto-loop-${i}`} style={{ position: "relative", height: "100svh", background: "#000", margin: 0, padding: 0, overflow: "hidden", transform: "translateZ(0)" }}>
           <div style={{ position: "absolute", inset: 0, background: "#000" }}>
             <img src={srcsLoop[i]} alt={v.titulo} style={imgStyle} draggable={false} />
           </div>
