@@ -1,162 +1,348 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+
+import { useRef, useState } from "react"
+import gsap from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
+import { useGSAP } from "@gsap/react"
+
+gsap.registerPlugin(ScrollTrigger)
+ScrollTrigger.config({ ignoreMobileResize: true })
 
 const GOLD = "#c9a86a"
+const BG = "#000000"
+const PANEL = "#0a0a0a"
 
-const videos = [
-  { src: "/torre-01-exterior.mp4", kicker: "ACTO 1 — EXTERIOR", title: "De vectores. A Hudson Yards.", desc: "Vectores → 3D → Render. El edificio nace delante de ti. Hudson Yards, New York." },
-  { src: "/torre-02-interior.mp4", kicker: "ACTO 2 — INTERIOR", title: "Entrar y sentir que llegaste.", desc: "Lobby doble altura. Gimnasio. Café-Bar. Restaurante. Todo en millones." },
-  { src: "/torre-03-parking.mp4", kicker: "ACTO 3 — PARKING", title: "Llegas. Te reciben.", desc: "Sótano privado. Portón. Flechas LED en el piso. Host que te acompaña al elevador." },
-  { src: "/torre-04-suite.mp4", kicker: "ACTO 4 — SUITE PRESIDENCIAL", title: "La suite que no se muestra. Se vive.", desc: "Biométrico + voz. Lobby presidencial. Isla curva de parota. Extractor oro 24K. Lámparas de millón. TV 200 pulgadas." },
-  { src: "/torre-05-master.mp4", kicker: "ACTO 5 — MASTER BEDROOM", title: "La cama de Dios.", desc: "80m2. Piso parota con epoxi transparente. Jacuzzi. Sauna. Hidro. Bar. Super King. Mármol negro con venas oro y titanio. Luces halo. Cortinas que se cierran solas. Luces de la ciudad. Modo íntimo." },
+// LOOP IGLOO.INC + REA - FIX MOUSE WHEEL
+// BUG ANTERIOR: ScrollTrigger.create(...).scroll(2) dejaba el scroll trabado en 2px al cargar.
+// Por eso el mouse (rueda) no avanzaba, solo flechas / PgUp / PgDown / Home / End.
+// FIX: quitar el .scroll(2) inicial, dejar wrap solo en bordes, restaurar overflow-y: auto
+// REA = Reverse Engineer Anything, para inspeccionar igloo.inc, no es libreria de loop.
+// Loop igloo.inc = GSAP timeline repeat -1 scrubbeado + wrap onLeave / onLeaveBack, sin recargar.
+const ACTOS = [
+  { path: "/frames/torre-01/frame-", total: 300, acto: "ACTO 1", titulo: "EXTERIOR", desc: "Vectores a 3D a render. Hudson Yards aprende a mirar hacia arriba." },
+  { path: "/frames/torre-02/frame-", total: 300, acto: "ACTO 2", titulo: "INTERIOR", desc: "Lobby, gimnasio, cafe-bar, restaurante. Entrar y sentir que llegaste." },
+  { path: "/frames/torre-03/frame-", total: 300, acto: "ACTO 3", titulo: "PARKING", desc: "Porton, flechas LED, anfitrion que te lleva al elevador privado." },
+  { path: "/frames/torre-04/frame-", total: 300, acto: "ACTO 4", titulo: "SUITE", desc: "Biometrico y voz. Isla curva de parota, extractor 24K oro, lamparas de un millon, TV 200 pulgadas." },
+  { path: "/frames/torre-05/frame-", total: 300, acto: "ACTO 5", titulo: "MASTER BEDROOM", desc: "80 m2. Piso de parota con epoxico transparente, jacuzzi, sauna, hidro, bar, cama de DIOS, marmol negro con vetas oro y titanio, halo lights, cortinas automaticas, modo intimo." },
 ]
 
 export default function Home() {
   const [mensaje, setMensaje] = useState("")
   const [enviado, setEnviado] = useState(false)
   const [enviando, setEnviando] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
-  const [needsTap, setNeedsTap] = useState<boolean[]>([false, false, false, false, false])
-  const [hasError, setHasError] = useState<boolean[]>([false, false, false, false, false])
-  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+  const [progreso, setProgreso] = useState<number[]>([0, 0, 0, 0, 0])
+  const [progresoLoop, setProgresoLoop] = useState<number[]>([0, 0, 0, 0, 0])
+  const [carga, setCarga] = useState<number[]>([0, 0, 0, 0, 0])
+  const mainRef = useRef<HTMLElement>(null)
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
+  const canvasLoopRefs = useRef<(HTMLCanvasElement | null)[]>([])
+  const framesRef = useRef<HTMLImageElement[][]>([[], [], [], [], []])
+  const framesLoopRef = useRef<HTMLImageElement[][]>([[], [], [], [], []])
+  const targetFrame = useRef<number[]>([0, 0, 0, 0, 0])
+  const targetFrameLoop = useRef<number[]>([0, 0, 0, 0, 0])
+  const currentFrame = useRef<number[]>([0, 0, 0, 0, 0])
+  const currentFrameLoop = useRef<number[]>([0, 0, 0, 0, 0])
+  const drawFns = useRef<((f: number) => void)[]>([])
+  const drawLoopFns = useRef<((f: number) => void)[]>([])
 
-  useEffect(() => {
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-    setIsIOS(ios)
-    // iOS: forzar muted por codigo, si no Safari bloquea autoplay
-    videoRefs.current.forEach((v) => {
-      if (!v) return
-      v.muted = true
-      // @ts-ignore
-      v.playsInline = true
-      v.setAttribute("playsinline", "")
-      v.setAttribute("webkit-playsinline", "")
-    })
-  }, [])
+  const setupActos = (isLoop: boolean) => {
+    ACTOS.forEach((acto, i) => {
+      const canvas = isLoop ? canvasLoopRefs.current[i] : canvasRefs.current[i]
+      const section = document.getElementById(isLoop ? `acto-loop-${i}` : `acto-${i}`)
+      if (!canvas || !section) return
+      const ctx = canvas.getContext("2d")
+      const resize = () => {
+        canvas.width = canvas.clientWidth * Math.min(2, window.devicePixelRatio || 1)
+        canvas.height = canvas.clientHeight * Math.min(2, window.devicePixelRatio || 1)
+      }
+      resize()
+      window.addEventListener("resize", resize)
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const video = entry.target as HTMLVideoElement
-          const idx = Number(video.dataset.idx)
-          if (entry.isIntersecting) {
-            const p = video.play()
-            if (p !== undefined) {
-              p.catch(() => {
-                setNeedsTap((prev) => { const n = [...prev]; n[idx] = true; return n })
-              })
-            }
-          } else {
-            video.pause()
+      let cargadas = 0
+      const framesArr = isLoop ? framesLoopRef.current : framesRef.current
+      for (let f = 1; f <= acto.total; f++) {
+        const img = new Image()
+        img.src = `${acto.path}${String(f).padStart(4, "0")}.jpg`
+        img.onload = () => {
+          cargadas++
+          if (!isLoop) {
+            setCarga((prev) => {
+              const next = [...prev]
+              next[i] = Math.round((cargadas / acto.total) * 100)
+              return next
+            })
           }
-        })
-      },
-      { threshold: 0.25, rootMargin: "0px 0px -5% 0px" }
+          if (cargadas === 1) {
+            if (isLoop) drawLoopFns.current[i]?.(0)
+            else drawFns.current[i]?.(0)
+          }
+        }
+        framesArr[i][f - 1] = img
+      }
+
+      const drawCover = (c: HTMLCanvasElement, ctx2: CanvasRenderingContext2D, img: HTMLImageElement, alpha: number) => {
+        const cw = c.width, ch = c.height
+        const iw = img.naturalWidth, ih = img.naturalHeight
+        if (iw === 0) return
+        const sc = Math.max(cw / iw, ch / ih)
+        ctx2.globalAlpha = alpha
+        ctx2.drawImage(img, (cw - iw * sc) / 2, (ch - ih * sc) / 2, iw * sc, ih * sc)
+        ctx2.globalAlpha = 1
+      }
+
+      const drawFrame = (frameFloat: number) => {
+        if (!ctx) return
+        const total = framesArr[i].length
+        if (total === 0) return
+        const clamped = Math.max(0, Math.min(total - 1.001, frameFloat))
+        const idxA = Math.floor(clamped)
+        const idxB = Math.min(total - 1, idxA + 1)
+        const alpha = clamped - idxA
+        const imgA = framesArr[i][idxA]
+        const imgB = framesArr[i][idxB]
+        if (!imgA || !imgA.complete || imgA.naturalWidth === 0) return
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        drawCover(canvas, ctx, imgA, 1 - alpha)
+        if (imgB && imgB.complete && imgB.naturalWidth > 0 && alpha > 0.01) drawCover(canvas, ctx, imgB, alpha)
+      }
+      if (isLoop) drawLoopFns.current[i] = drawFrame
+      else drawFns.current[i] = drawFrame
+
+      ScrollTrigger.create({
+        trigger: section,
+        start: "top top",
+        end: "+=250%",
+        pin: true,
+        pinSpacing: true,
+        scrub: 0.6,
+        anticipatePin: 0,
+        fastScrollEnd: false,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
+          if (isLoop) {
+            targetFrameLoop.current[i] = self.progress * (acto.total - 1)
+            setProgresoLoop((prev) => {
+              const next = [...prev]
+              next[i] = Math.round(self.progress * 100)
+              return next
+            })
+          } else {
+            targetFrame.current[i] = self.progress * (acto.total - 1)
+            setProgreso((prev) => {
+              const next = [...prev]
+              next[i] = Math.round(self.progress * 100)
+              return next
+            })
+          }
+        },
+      })
+
+      const wrapId = isLoop ? `video-wrap-loop-${i}` : `video-wrap-${i}`
+      const textoId = isLoop ? `texto-loop-${i}` : `texto-${i}`
+      gsap.fromTo(
+        `#${wrapId}`,
+        { yPercent: -2 },
+        { yPercent: 2, ease: "none", scrollTrigger: { trigger: section, start: "top top", end: "+=250%", scrub: 0.6 } }
+      )
+      gsap.fromTo(
+        `#${textoId}`,
+        { y: 30 },
+        { y: -20, ease: "none", scrollTrigger: { trigger: section, start: "top top", end: "+=250%", scrub: 0.6 } }
+      )
+    })
+  }
+
+  useGSAP(() => {
+    gsap.fromTo(
+      ".hero-line",
+      { y: 60, opacity: 0 },
+      { y: 0, opacity: 1, duration: 1.2, stagger: 0.15, ease: "power3.out", delay: 0.2 }
     )
-    videoRefs.current.forEach((v) => v && observer.observe(v))
-    return () => observer.disconnect()
-  }, [])
+    gsap.fromTo(
+      ".hero-loop-line",
+      { y: 60, opacity: 0 },
+      { y: 0, opacity: 1, duration: 1.2, stagger: 0.15, ease: "power3.out", scrollTrigger: { trigger: "#hero-loop", start: "top 80%" } }
+    )
 
-  const tapToPlay = (i: number) => {
-    const v = videoRefs.current[i]
-    if (!v) return
-    v.muted = true
-    v.play().then(() => {
-      setNeedsTap((prev) => { const n = [...prev]; n[i] = false; return n })
-    }).catch(() => {})
-    // En iPhone, al primer tap, desbloquea los demas tambien
-    videoRefs.current.forEach((vv) => { if (vv) { vv.muted = true; } })
-  }
+    setupActos(false)
+    setupActos(true)
 
-  const onError = (i: number) => {
-    setHasError((prev) => { const n = [...prev]; n[i] = true; return n })
-  }
+    // LOOP IGLOO - WRAP SOLO EN BORDES, SIN TRABAR EL MOUSE AL CARGAR
+    // ANTES: .scroll(2) al cargar trababa la rueda del mouse en 2px
+    // AHORA: no hacemos scroll inicial, dejamos que el mouse, flechas, trackpad funcionen normal
+    // Solo cuando llegas al final del todo, hace wrap a 2, y cuando subes al inicio, wrap a maxScroll-2
+    ScrollTrigger.create({
+      start: 1,
+      end: () => ScrollTrigger.maxScroll(window) - 1,
+      onLeave: (self) => self.scroll(2),
+      onLeaveBack: (self) => self.scroll(ScrollTrigger.maxScroll(window) - 2),
+    })
+    // Asegurar que ScrollTrigger calcule bien el maxScroll despues de los pins
+    ScrollTrigger.refresh()
+
+    const tick = () => {
+      ACTOS.forEach((_, i) => {
+        const diff = targetFrame.current[i] - currentFrame.current[i]
+        if (Math.abs(diff) > 0.01) {
+          if (Math.abs(diff) > 50) {
+            currentFrame.current[i] = targetFrame.current[i]
+          } else {
+            currentFrame.current[i] += Math.sign(diff) * Math.min(Math.abs(diff), 1.0)
+          }
+        }
+        drawFns.current[i]?.(currentFrame.current[i])
+
+        const diffLoop = targetFrameLoop.current[i] - currentFrameLoop.current[i]
+        if (Math.abs(diffLoop) > 0.01) {
+          if (Math.abs(diffLoop) > 50) {
+            currentFrameLoop.current[i] = targetFrameLoop.current[i]
+          } else {
+            currentFrameLoop.current[i] += Math.sign(diffLoop) * Math.min(Math.abs(diffLoop), 1.0)
+          }
+        }
+        drawLoopFns.current[i]?.(currentFrameLoop.current[i])
+      })
+    }
+    gsap.ticker.add(tick)
+    return () => { gsap.ticker.remove(tick) }
+  }, { scope: mainRef })
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
     if (!mensaje.trim()) return
     setEnviando(true)
     try {
-      const res = await fetch("/api/mensaje", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: mensaje.trim() }),
-      })
+      const form = new FormData()
+      form.append("access_key", "e39fe332-98d5-455c-95f5-664eee8ffb01")
+      form.append("subject", "Mensaje")
+      form.append("from_name", "")
+      form.append("message", mensaje.trim())
+      const res = await fetch("https://api.web3forms.com/submit", { method: "POST", body: form })
       if (res.ok) { setEnviado(true); setMensaje("") }
     } catch {}
     setEnviando(false)
   }
 
-  return (
-    <main style={{ background: "#000", color: "white", fontFamily: "Arial, Helvetica, sans-serif", overflowX: "hidden", WebkitFontSmoothing: "antialiased" }}>
-      {/* HERO BLOQUEADO - TORRE GUERRERO - RESPONSIVE */}
-      <section style={{ minHeight: "100svh", minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "calc(env(safe-area-inset-top) + 24px) 6% calc(env(safe-area-inset-bottom) + 32px)", boxSizing: "border-box" }}>
-        <p style={{ fontSize: "clamp(9px, 2.5vw, 11px)", letterSpacing: "clamp(3px, 1.2vw, 6px)", color: "#999", margin: "0 0 18px", lineHeight: 1.6 }}>HUDSON YARDS - NUEVA YORK - LA GRAN MANZANA</p>
-        <h1 style={{ margin: 0, lineHeight: 0.95, textAlign: "center" }}>
-          <span style={{ display: "block", fontSize: "clamp(52px, 14vw, 120px)", fontWeight: 400, letterSpacing: 2, color: "white" }}>TORRE</span>
-          <span style={{ display: "block", fontSize: "clamp(52px, 14vw, 120px)", fontWeight: 600, letterSpacing: 1, color: GOLD, fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic" }}>GUERRERO</span>
+  const HeroContent = ({ lineClass }: { lineClass: string }) => (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, letterSpacing: 4, color: GOLD }}>
+        <span>MICHEL GUERRERO — ARCHITECT — NEW YORK</span>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <p className={lineClass} style={{ letterSpacing: 6, fontSize: "clamp(10px, 2.5vw, 12px)", color: GOLD, marginBottom: 16 }}>HUDSON YARDS — NUEVA YORK — LA GRAN MANZANA</p>
+        <h1 className={lineClass} style={{ fontSize: "clamp(56px, 12vw, 148px)", lineHeight: 0.88, fontWeight: 900, letterSpacing: -2, margin: 0, textTransform: "uppercase" }}>
+          <span style={{ color: "white", display: "block" }}>TORRE</span>
+          <span style={{ color: GOLD, fontStyle: "italic", display: "block", fontWeight: 400 }}>Guerrero</span>
         </h1>
-        <p style={{ fontSize: "clamp(14px, 4vw, 16px)", fontStyle: "italic", color: "#ddd", margin: "22px 0 8px", padding: "0 4%" }}>Donde la ciudad aprende a mirar hacia arriba.</p>
-        <p style={{ fontSize: "clamp(11px, 3.2vw, 12px)", color: "#777", maxWidth: 520, lineHeight: 1.6, margin: "0 auto", padding: "0 4%" }}>Una torre pórtico sobre Hudson. Arquitectura de precisión, luz de atardecer y silencio de altura.</p>
-        <p style={{ fontSize: "clamp(9px, 2.8vw, 10px)", letterSpacing: "clamp(2px, 0.8vw, 4px)", color: "#888", marginTop: 36, padding: "0 4%" }}>DESLIZA - LA TORRE NO SE PRESENTA, SE RECORRE</p>
-        {isIOS && <p style={{ fontSize: 11, color: GOLD, marginTop: 14 }}>Toca el video para ver la película en iPhone ↓</p>}
+        <p className={lineClass} style={{ fontSize: "clamp(16px, 3.5vw, 22px)", maxWidth: 640, color: "#ccc", lineHeight: 1.5, margin: "22px auto 0" }}>
+          Donde la ciudad aprende a mirar hacia arriba
+        </p>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", flexWrap: "wrap", gap: 12 }}>
+        <p style={{ fontSize: 11, letterSpacing: 3, color: "#888", margin: 0 }}>DESLIZA — LA TORRE NO SE PRESENTA, SE RECORRE ↓</p>
+        <p style={{ fontSize: 11, letterSpacing: 3, color: GOLD, margin: 0 }}>TORRE GUERRERO — 12 NIVELES — 58 M</p>
+      </div>
+    </>
+  )
+
+  return (
+    <main ref={mainRef} style={{ background: BG, color: "white", fontFamily: "Arial, Helvetica, sans-serif", overflowX: "hidden", overflowY: "auto", margin: 0, padding: 0 }}>
+      {/* QUITAR BARRA SIN ROMPER MOUSE WHEEL */}
+      <style>{`
+        html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; }
+        html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
+        *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+        * { scrollbar-width: none !important; }
+        html { overflow-x: hidden; -webkit-text-size-adjust: 100%; }
+        body { overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+        /* NO poner overscroll-behavior: none ni scroll-behavior: auto en html, eso trababa la rueda */
+        /* NO poner overflow: hidden en html/body, eso mataba el mouse */
+      `}</style>
+
+      {/* HERO BLOQUEADO - VUELTA 1 */}
+      <section style={{ minHeight: "100svh", padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <HeroContent lineClass="hero-line" />
       </section>
 
-      {/* 5 VIDEOS - RESPONSIVE MULTIMODAL - iPHONE READY */}
-      {videos.map((v, i) => (
-        <section key={i} style={{ position: "relative", minHeight: "100svh", minHeight: "100dvh", display: "flex", alignItems: "end", overflow: "hidden", background: "#0a0a0a" }}>
-          {/* Fallback multimodal: si el video falla en iPhone, no queda negro. Queda este fondo cinematico. */}
-          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, #111 0%, #000 50%, #1a1408 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <p style={{ color: GOLD, letterSpacing: 6, fontSize: 11, opacity: 0.6 }}>{v.kicker}</p>
+      {/* 5 ACTOS - VUELTA 1 */}
+      {ACTOS.map((v, i) => (
+        <section key={v.path} id={`acto-${i}`} style={{ position: "relative", height: "100svh", background: "#000", margin: 0, padding: 0, overflow: "hidden" }}>
+          <div id={`video-wrap-${i}`} style={{ position: "absolute", inset: 0, willChange: "transform", transform: "translate3d(0,0,0)" }}>
+            <canvas ref={(el) => { canvasRefs.current[i] = el }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
           </div>
-          {!hasError[i] && (
-            <video
-              ref={(el) => { videoRefs.current[i] = el }}
-              data-idx={i}
-              src={v.src}
-              muted
-              loop
-              playsInline
-              // @ts-ignore - iOS Safari
-              webkit-playsinline=""
-              preload={i === 0 ? "auto" : "metadata"}
-              disablePictureInPicture
-              onError={() => onError(i)}
-              onClick={() => tapToPlay(i)}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden", background: "#000" }}
-            />
-          )}
-          {/* Boton TAP en iPhone cuando Safari bloquea autoplay */}
-          {needsTap[i] && !hasError[i] && (
-            <button onClick={() => tapToPlay(i)} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.65)", color: "white", border: `1px solid ${GOLD}`, padding: "14px 22px", borderRadius: 999, fontSize: 14, fontWeight: 700, letterSpacing: 1, cursor: "pointer", zIndex: 5, backdropFilter: "blur(6px)" }}>▶ TOCA PARA VER LA PELÍCULA</button>
-          )}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 40%, rgba(0,0,0,0.88) 100%)", pointerEvents: "none" }} />
-          <div style={{ position: "relative", padding: "calc(env(safe-area-inset-bottom) + 36px) 6% 48px", paddingLeft: "6%", paddingRight: "6%", maxWidth: 900, width: "100%", boxSizing: "border-box" }}>
-            <p style={{ color: GOLD, letterSpacing: 5, fontSize: "clamp(10px, 3vw, 12px)", margin: 0 }}>{v.kicker}</p>
-            <h2 style={{ fontSize: "clamp(30px, 9vw, 72px)", lineHeight: 0.95, textTransform: "uppercase", margin: "12px 0" }}>{v.title}</h2>
-            <p style={{ color: "#ddd", fontSize: "clamp(14px, 4.2vw, 18px)", lineHeight: 1.5, maxWidth: 640 }}>{v.desc}</p>
-            <p style={{ color: GOLD, fontSize: 11, letterSpacing: 3 }}>VIDEO {i+1} / 5 — COMPLETO — SIN CORTES</p>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 40%, transparent 55%, rgba(0,0,0,0.78) 100%)", pointerEvents: "none" }} />
+          {/* LINEA DORADA DE ARRIBA ELIMINADA - era la barra de progreso */}
+          <div id={`texto-${i}`} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "clamp(24px, 6vw, 64px) 6% calc(32px + env(safe-area-inset-bottom))", maxWidth: 900, willChange: "transform", transform: "translate3d(0,0,0)" }}>
+            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 1 · LOOP IGLOO · CARGA {carga[i]}%</p>
+            <h2 style={{ fontSize: "clamp(36px, 7vw, 72px)", margin: "10px 0", textTransform: "uppercase", lineHeight: 0.95 }}>{v.titulo}</h2>
+            <p style={{ fontSize: "clamp(15px, 3.5vw, 19px)", color: "#ddd", lineHeight: 1.6, maxWidth: 640, margin: 0 }}>{v.desc}</p>
+            <p style={{ fontSize: 11, letterSpacing: 3, color: "#eee", marginTop: 14 }}>{i + 1} / 5 — VIDEO {progreso[i]}% — MOUSE / FLECHAS / TRACKPAD FUNCIONAN</p>
           </div>
         </section>
       ))}
 
-      {/* CONTACTO PRIVADO - RESPONSIVE */}
-      <section style={{ padding: "64px 6% calc(env(safe-area-inset-bottom) + 64px)", background: "#0a0a0a", textAlign: "center", boxSizing: "border-box" }}>
-        <h2 style={{ fontSize: "clamp(30px, 8vw, 56px)", textTransform: "uppercase", lineHeight: 1.05 }}>Hablemos en <span style={{ color: GOLD }}>privado.</span></h2>
-        <p style={{ color: "#aaa", fontSize: "clamp(13px, 4vw, 16px)", padding: "0 4%" }}>No pedimos tu nombre ni tu correo. Solo tu mensaje. Trusting People.</p>
+      <section style={{ padding: "80px 6%", maxWidth: 1100, margin: "0 auto" }}>
+        <h2 style={{ fontSize: "clamp(32px, 5vw, 56px)", textTransform: "uppercase", lineHeight: 1 }}>Casa vertical.<br /><span style={{ color: GOLD }}>Para un solo dueno.</span></h2>
+        <p style={{ color: "#aaa", maxWidth: 620 }}>1 acceso. 1 elevador privado. 0 vecinos. 0 pasillos compartidos. Cada nivel es una decision.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 32 }}>
+          {[
+            ["LOBBY", "Doble altura 7.5 m. Piedra, bronce, silencio."],
+            ["WELLNESS", "Gimnasio, spa, sauna, piscina de contraste."],
+            ["CINE + BIBLIOTECA", "Cine privado. Sala de musica."],
+            ["GRAN SALON", "Doble altura. Comedor para 24."],
+            ["SUITES", "3 suites de invitados, bano en piedra."],
+            ["CROWN", "Observatorio + terraza 360 sobre Hudson Yards."],
+          ].map(([t, d]) => (
+            <div key={t} style={{ border: "1px solid #333", padding: 22, background: PANEL }}>
+              <p style={{ color: GOLD, fontSize: 11, letterSpacing: 3, margin: 0 }}>{t}</p>
+              <p style={{ color: "#ccc", fontSize: 15, lineHeight: 1.5 }}>{d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ padding: "80px 6%", background: PANEL, textAlign: "center" }}>
+        <h2 style={{ fontSize: "clamp(36px, 5vw, 56px)", textTransform: "uppercase" }}>Hablemos en <span style={{ color: GOLD }}>privado.</span></h2>
+        <p style={{ color: "#aaa" }}>No pedimos tu nombre ni tu correo. Solo tu mensaje. Trusting People.</p>
         {enviado ? (
           <p style={{ background: "#12261a", border: "1px solid #2e7d32", padding: 20, maxWidth: 600, margin: "24px auto", color: "#a5d6a7" }}>Mensaje enviado. Gracias por confiar.</p>
         ) : (
-          <form onSubmit={enviar} style={{ maxWidth: 600, margin: "24px auto", textAlign: "left", width: "100%", boxSizing: "border-box" }}>
-            <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Escribe tu mensaje aqui... Si quieres que te contacte, dejalo dentro del mensaje." rows={6} style={{ width: "100%", background: "#111", color: "white", border: `1px solid ${GOLD}`, padding: 16, fontSize: 16, borderRadius: 8, boxSizing: "border-box", WebkitAppearance: "none" }} />
-            <button type="submit" disabled={enviando} style={{ width: "100%", marginTop: 14, background: GOLD, color: "black", border: "none", padding: "16px", borderRadius: 30, fontWeight: 900, fontSize: 16, cursor: "pointer", WebkitAppearance: "none" }}>{enviando ? "ENVIANDO..." : "ESCRIBEME EN PRIVADO →"}</button>
+          <form onSubmit={enviar} style={{ maxWidth: 600, margin: "24px auto", textAlign: "left" }}>
+            <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Escribe tu mensaje aqui... Si quieres que te contacte, dejalo dentro del mensaje." rows={6} style={{ width: "100%", background: "#111", color: "white", border: `1px solid ${GOLD}`, padding: 16, fontSize: 16, borderRadius: 8, boxSizing: "border-box" }} />
+            <button type="submit" disabled={enviando} style={{ width: "100%", marginTop: 14, background: GOLD, color: "black", border: "none", padding: "16px", borderRadius: 30, fontWeight: 900, fontSize: 16, cursor: "pointer" }}>{enviando ? "ENVIANDO..." : "ESCRIBEME EN PRIVADO →"}</button>
             <p style={{ fontSize: 12, color: "#777", textAlign: "center" }}>100% privado. Sin formularios. Sin seguimiento.</p>
           </form>
         )}
       </section>
-      <footer style={{ padding: "24px 6% calc(env(safe-area-inset-bottom) + 24px)", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between", fontSize: 11, letterSpacing: 2, color: "#666", boxSizing: "border-box" }}>
-        <span>MICHEL GUERRERO — NEW YORK</span><span>HUDSON YARDS — TRUSTING PEOPLE</span>
+
+      {/* LOOP - VUELTA 2 */}
+      <section style={{ padding: "40px 6%", textAlign: "center", background: "#000", borderTop: "1px solid #222" }}>
+        <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>LOOP IGLOO.INC — CONTINUO, SIN RECARGAR</p>
+        <p style={{ color: "#aaa", fontSize: 13, marginTop: 8 }}>Sigue bajando con el mouse, vuelve a aparecer TORRE GUERRERO, luego Acto 1, sin reversa</p>
+      </section>
+
+      <section id="hero-loop" style={{ minHeight: "100svh", padding: "max(28px, env(safe-area-inset-top)) 8% max(40px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#000" }}>
+        <HeroContent lineClass="hero-loop-line" />
+      </section>
+
+      {ACTOS.map((v, i) => (
+        <section key={`loop-${v.path}`} id={`acto-loop-${i}`} style={{ position: "relative", height: "100svh", background: "#000", margin: 0, padding: 0, overflow: "hidden" }}>
+          <div id={`video-wrap-loop-${i}`} style={{ position: "absolute", inset: 0, willChange: "transform", transform: "translate3d(0,0,0)" }}>
+            <canvas ref={(el) => { canvasLoopRefs.current[i] = el }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
+          </div>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 40%, transparent 55%, rgba(0,0,0,0.78) 100%)", pointerEvents: "none" }} />
+          {/* LINEA DORADA DE ARRIBA ELIMINADA - era la barra de progreso */}
+          <div id={`texto-loop-${i}`} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "clamp(24px, 6vw, 64px) 6% calc(32px + env(safe-area-inset-bottom))", maxWidth: 900, willChange: "transform", transform: "translate3d(0,0,0)" }}>
+            <p style={{ color: GOLD, letterSpacing: 5, fontSize: 12, margin: 0 }}>{v.acto} — VUELTA 2 · LOOP IGLOO</p>
+            <h2 style={{ fontSize: "clamp(36px, 7vw, 72px)", margin: "10px 0", textTransform: "uppercase", lineHeight: 0.95 }}>{v.titulo}</h2>
+            <p style={{ fontSize: "clamp(15px, 3.5vw, 19px)", color: "#ddd", lineHeight: 1.6, maxWidth: 640, margin: 0 }}>{v.desc}</p>
+            <p style={{ fontSize: 11, letterSpacing: 3, color: "#eee", marginTop: 14 }}>{i + 1} / 5 — VIDEO {progresoLoop[i]}% — LOOP CONTINUO, SIN REVERSA</p>
+          </div>
+        </section>
+      ))}
+
+      <footer style={{ padding: "24px 6%", display: "flex", justifyContent: "space-between", fontSize: 11, letterSpacing: 2, color: "#666", background: "#000" }}>
+        <span>MICHEL GUERRERO — NEW YORK</span><span>HUDSON YARDS — LOOP IGLOO ↺ — MOUSE OK</span>
       </footer>
     </main>
   )
